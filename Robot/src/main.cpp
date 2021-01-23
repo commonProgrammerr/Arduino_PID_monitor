@@ -1,8 +1,9 @@
 /*
  * Referencias:
  *  - Biblioteca PID: https://playground.arduino.cc/Code/PIDLibrary/
+ *  - Código PID: https://playground.arduino.cc/Code/PIDLibraryPonMExample/
  *  - Datasheet drive L9110_2: https://cdn.awsli.com.br/945/945993/arquivos/L9110_2_CHANNEL_MOTOR_DRIVER.pdf
- *  - Leitura sensor ultrassonico: https://github.com/gamegine/HCSR04-ultrasonic-sensor-lib/blob/master/src/HCSR04.cpp
+ *  - Código sensor ultrassonico: https://github.com/gamegine/HCSR04-ultrasonic-sensor-lib/blob/master/src/HCSR04.cpp
  *  - Comunicação serial: 
  *
  *
@@ -10,6 +11,7 @@
 
 
 #include <Arduino.h>
+#include "PID_v1.h"
 
 #define TRIG_PIN 2
 #define ECHO_PIN 3
@@ -36,25 +38,43 @@
 
 // constantes
 #define K 29.4 // 29.4 microseconds para o som percorrer um centímetro.
-
+#define Kp 2
+#define Ki 5
+#define Kd 1
 
 class Motor;
 float mensure();
 void request();
 void response();
+
+double setpoint, distance, motors_power;
+bool is_pause = true;
 Motor left_motor;
 Motor right_motor;
 
+PID myPID(&distance, &motors_power, &setpoint, Kp, Ki, Kd, P_ON_M, DIRECT);
+
+
 void setup() {
+
+  Serial.begin(2000000)
+  Serial.readBytesUntil(READY)
   left_motor = new Motor(10, 9);
   right_motor = new Motor(5, 6);
   pinMode(TRIG, OUTPUT);
   pinMode(ECHO, INPUT);
-  Serial.beguin(11600)
+  
+  setpoint = 2.0
+  myPID.SetOutputLimits(-255, 255);
+  myPID.SetMode(AUTOMATIC);
 }
 
+
 void loop() {
-  // put your main code here, to run repeatedly:
+  distance = mensure();
+  myPID.Compute();
+  left_motor.move(motors_power)
+  right_motor.move(motors_power)
 }
 
 class Motor {
