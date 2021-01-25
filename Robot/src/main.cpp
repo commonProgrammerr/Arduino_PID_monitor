@@ -8,33 +8,31 @@
 */
 
 #include <Arduino.h>
-#include "../include/Arduino-PID-Library/PID_v1.h"
+#include "../include/Arduino-PID-Library/PID_v1.cpp" // um bug faz com que o compilador não encontre os arquivos de forma correta, para contornar isso fizemos o include no aquivo .cpp
 
 
 // pinos
 #define TRIG_PIN 2
 #define ECHO_PIN 3
 
-// sginal bytes 
-#define READY   '►' // 0x0f
-#define STOP    '$' // 0x24
-#define HEADER  '<' // 0x3c
-#define TAIL    '>' // 0x3e
-#define RECIVE  '@' // 0x40
-#define SEND    '‼' // 0x13
+// sginal bytes §
+#define READY   '#'   // 0x23
+#define HEADER  '<'   // 0x3c
+#define TAIL    '>'   // 0x3e
+#define RECIVE  '@'   // 0x40
+#define SEND    '%'   // 0x25  
 
 // RECIVE/SEND bytes
 #define SET_DISTANCE  '!' // 0x21  declara a distância "objetiva" 
-#define OK            '_' // 0x5f  byte de confirmação
-#define ERROR         ':' // 0x3a  byte de erro 
+#define REQUEST_DATA  '_' // 0x5f  byte de requisição
 #define SPLITER       ';' // 0x3b  byte de separação de valores
-
 
 // constantes
 #define K 29.4 // 29.4 microseconds para o som percorrer um centímetro.
-#define Kp 2
-#define Ki 5
-#define Kd 1
+#define K_drive 1.07 // contante para equilibra a diferença de potencia entre os motores esquedo e direito
+#define Kp 2 * 10 // 23.0
+#define Ki 5 * 10 // 0.0
+#define Kd 1 * 10 // 0.0
 
 class Motor {
   private:
@@ -47,90 +45,72 @@ class Motor {
 };
 
 float mensure();
-void send(String info);
-void read();
+void awai_request();
+void send_data();
 
-
-
-double setpoint, distance, motors_power;
-bool is_pause = true;
-Motor left_motor(10, 9);
-Motor right_motor(5, 6);
+double setpoint, distance, motors_power = 0.0;
+Motor left_motor(5, 6);
+Motor right_motor(10, 9);
 
 PID pid(&distance, &motors_power, &setpoint, Kp, Ki, Kd, P_ON_M, DIRECT);
 
 void setup() {
 
-  Serial.begin(2000000);
+  Serial.begin(9600);
+  Serial.setTimeout(2);
   pinMode(TRIG_PIN, OUTPUT);
   pinMode(ECHO_PIN, INPUT);
   
-  setpoint = 4.0;
-  pid.SetOutputLimits(-255, 255);
+  setpoint = 8.0;
+  pid.SetOutputLimits(-175, 175);
   pid.SetMode(AUTOMATIC);
 }
 
 void loop() {
-  read();
-  if(is_pause) {
-    if(READY == Serial.read()) is_pause = false;
-    else return;
-  } 
-  
   distance = mensure();
-  
   pid.Compute();
-  
-  String output = "";
-  output = output.concat(String(distance));
-  output = output.concat(String(SPLITER));
-  output = output.concat(String(motors_power));
-  
-  send(output);
-  output = "";
-  
-  left_motor.move(motors_power);
-  right_motor.move(motors_power); 
+  left_motor.move(-motors_power * K_drive);
+  right_motor.move(-motors_power);
+  awai_request();
 }
 
-void read() {
+void awai_request() {
   Serial.readStringUntil(RECIVE);
   Serial.readStringUntil(HEADER);
   String data = Serial.readStringUntil(TAIL);
 
-  bool erro = (data.indexOf(ERROR) >= 0);
-  bool stop = (data.indexOf(STOP) >= 0);
-  bool set_distance = (data.indexOf(SET_DISTANCE) >= 0);
-
-  if(erro || stop) is_pause = true;
-    
-  if(set_distance) {
+  bool is_setup_distance = (data.indexOf(SET_DISTANCE) >= 0);
+  bool is_data_require = (data.indexOf(REQUEST_DATA) >= 0);
+  
+  send_data();
+  
+  if(is_setup_distance) {
     data.remove(READY);
-    data.remove(STOP);
     data.remove(HEADER);
     data.remove(TAIL);
     data.remove(RECIVE);
     data.remove(SEND);
     data.remove(SET_DISTANCE);
-    data.remove(OK);
-    data.remove(ERROR);
+    data.remove(REQUEST_DATA);
     data.remove(SPLITER);
     setpoint = data.toDouble();
   }
 
 }
 
-void send(String info) {
+void send_data() {
   Serial.print(SEND);
   Serial.print(HEADER);
-  Serial.print(info);
+  Serial.print(distance);
+  Serial.print(SPLITER);
+  Serial.print(motors_power);
   Serial.print(TAIL);
 }
 
 float mensure() {
     
     // Ao emitir um ultra som, o sensor gera mais de uma onda ultrassonica. Afim de evitar erros de leitura é ncessario esperar pelo menos 2 microssegundos.
-    delayMicroseconds(2);// espera o final do ruino.
+    delayMicroseconds(20);// espera o final do ruino.
 
     // Emite ondas ultrassonicas por 10 microssegundos (10 * 1^-10000 segundos)
     digitalWrite(TRIG_PIN, HIGH); 
@@ -152,13 +132,13 @@ void Motor::move(double pow) {
 
   if(pow > 0.0 && pow <= 255.0) {
 
-    analogWrite(this->portaA, pow);
-    analogWrite(this->portaB, 0);
-  
-  } else if (pow < 0.0 && pow >= -255) {
-  
     analogWrite(this->portaA, 0);
-    analogWrite(this->portaB, pow * -1);
+    analogWrite(this->portaB, pow);
+  
+  } else if (pow < 0.0 && pow >= -255.0) {
+  
+    analogWrite(this->portaB, 0);
+    analogWrite(this->portaA, pow * -1);
 
   } else {
   
