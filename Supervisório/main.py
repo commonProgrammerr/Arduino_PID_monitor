@@ -1,27 +1,39 @@
-
+# try:
+#     from PyQt5 import QtWidgets, QtCore
+#     from PyQt5.QtWidgets import QSlider, QPushButton, QHBoxLayout, QVBoxLayout, QGroupBox, QGridLayout, QComboBox, QWidget
+#     from serial.tools.list_ports import comports
+#     import serial
+#     import pyqtgraph as pg
+# except ModuleNotFoundError:
+#     import pip
+#     if hasattr(pip, 'main'):
+#         pip.main(['install', 'pyqt5', 'pyserial', 'pyqtgraph'])
+#     else:
+#         pip._internal.main(['install', 'pyqt5', 'pyserial',   'pyqtgraph'])
+    
 from PyQt5 import QtWidgets, QtCore
 from PyQt5.QtWidgets import QSlider, QPushButton, QHBoxLayout, QVBoxLayout, QGroupBox, QGridLayout, QComboBox, QWidget
-from numpy.core.records import array
 from serial.tools.list_ports import comports
-from threading import Thread
 import serial
 import pyqtgraph as pg
+    
+import random
+from threading import Thread
 import sys
 
 # sginal bytes 
 READY=   '#' # 0x0f 
-STOP=    '$' # 0x24
 HEADER=  '<' # 0x3c /
 TAIL=    '>' # 0x3e 
 RECIVE=  '%' # 0x13
 SEND=    '@' # 0x40
 
 # RECIVE/SEND bytes
-SET_DISTANCE=  '!' # 0x21 declara a distância "objetiva" 
+SET_DISTANCE=  '!' # 0x21 declara a distância 'objetiva' 
 REQUEST_DATA=  '_' # 0x5f  byte de requisição # 0x5f byte de confirmação
 SPLITER=       ';' # 0x3b byte de separação de valores
 
-DELAY = 0.005
+DELAY = 0.05
 DEFAUL_INTERVAL = 10
 DEFAUL_REQUIRED_DISTANCE = 8000.0
 
@@ -107,11 +119,9 @@ class MainWindow(QtWidgets.QMainWindow):
         self.setMinimumSize(1240, 820)
         self.setMaximumSize(1240, 820)
         
-        self.usb:USB = None
-        self.is_connected:bool = False
-        self.required_distance:float = DEFAUL_REQUIRED_DISTANCE
-        
-        self.main_container = QGroupBox("")
+        # self.usb:USB = None
+        self.is_connected:bool = False        
+        self.main_container = QGroupBox('')
         
         self.chartsAreaMount()
         self.controlAreaMount()
@@ -125,38 +135,39 @@ class MainWindow(QtWidgets.QMainWindow):
         self.setCentralWidget(self.main_container)
         
         self.timer = QtCore.QTimer()
-        self.timer.setInterval(DELAY)
+        self.timer.setInterval(int(DELAY * 1000))
         self.timer.timeout.connect(self.update_plot_data)
         
-
         self.show()
-    
+
+       
     def stop(self):
-        self.usb.stop()
+        # self.usb.stop()
         self.timer.stop()
-        self.usb.flush()
+        # self.usb.flush()
         
     
     def start(self):
-        for _ in range(5):
-            if self.usb.start():
-                self.usb.flush()
-                self.timer.start()
-                break
+        self.timer.start()
+        # pass
+        # for _ in range(5):
+            # if self.usb.start():
+                # self.usb.flush()
+        #         break
 
     def chartsAreaMount(self):
     
-        styles = {"color": "#f0f0f5", "font-size": "18px"}
+        styles = {'color': '#f0f0f5', 'font-size': '18px'}
         self.sensort_chart:pg.PlotWidget = pg.PlotWidget()
         self.motors_powerChart:pg.PlotWidget = pg.PlotWidget()
         
         self.motors_powerChart.setYRange( -225, 225)
         self.sensort_chart.setYRange(2, 160)
-        self.sensort_chart.setLabel("left", "Distância (cm)", **styles)
-        self.motors_powerChart.setLabel("left", "PWM", **styles)
+        self.sensort_chart.setLabel('left', 'Distância (cm)', **styles)
+        self.motors_powerChart.setLabel('left', 'PWM', **styles)
         
-        self.sensort_chart.setLabel("bottom", "Tempo (s)", **styles)
-        self.motors_powerChart.setLabel("bottom", "Tempo (s)", **styles)
+        self.sensort_chart.setLabel('bottom', 'Tempo (s)', **styles)
+        self.motors_powerChart.setLabel('bottom', 'Tempo (s)', **styles)
         
         self.sensort_chart.addLegend()
         self.motors_powerChart.addLegend()
@@ -166,21 +177,21 @@ class MainWindow(QtWidgets.QMainWindow):
         self.pwmLida = [] 
         self.distancia_desejada = []
 
-        self.data_line =  self.sensort_chart.plot(self.tempo, self.distance_data, name="Sensor" ,pen=pg.mkPen(color=(255, 0, 0)))
-        self.objetive_line =  self.sensort_chart.plot(self.tempo, self.distancia_desejada, name="Objetivo")
-        self.pwm_line = self.motors_powerChart.plot(self.tempo, self.pwmLida, name="PWM") 
+        self.data_line =  self.sensort_chart.plot(self.tempo, self.distance_data, name='Sensor' ,pen=pg.mkPen(color=(255, 0, 0)))
+        self.objetive_line =  self.sensort_chart.plot(self.tempo, self.distancia_desejada, name='Objetivo')
+        self.pwm_line = self.motors_powerChart.plot(self.tempo, self.pwmLida, name='PWM') 
         
         
         container = QHBoxLayout()
         container.addStretch(2)
         container.addWidget(self.sensort_chart)
         container.addWidget(self.motors_powerChart)
-        self.charts_container = QGroupBox("Charts")
+        self.charts_container = QGroupBox('Charts')
         self.charts_container.setLayout(container)
 
     def controlAreaMount(self):
 
-        def createField(legend: str, elements: list(QWidget)):
+        def createField(legend: str, elements: list):
             grupe = QGroupBox(legend)
             layout= QVBoxLayout()
             for element in elements:
@@ -188,20 +199,6 @@ class MainWindow(QtWidgets.QMainWindow):
                 layout.addWidget(element)
             grupe.setLayout(layout)
             return grupe
-        
-        def update_time_interval():
-            self.interval_slider.parent.setTitle(f'Intervalo de analize ({self.interval_slider.value() / 100} s)')
-            maxlen = (self.interval_slider.value() / 100) * DELAY
-            if len(self.tempo) > maxlen:
-                self.tempo = self.tempo[maxlen:-1]
-                self.tempo = self.pwmLida[maxlen:-1]
-                self.tempo = self.distancia_desejada[maxlen:-1]
-                self.tempo = self.distance_data[maxlen:-1]
-
-                self.pwm_line.setData(self.tempo, self.pwmLida)
-                self.objetive_line.setData(self.tempo, self.distancia_desejada)
-                self.data_line.setData(self.tempo, self.distance_data)  
-                
 
         gridLayout = QGridLayout()
         gridLayout.setColumnStretch(1, 1)
@@ -209,12 +206,12 @@ class MainWindow(QtWidgets.QMainWindow):
         
         # instaceado elementos do secundarios
         self.combobox = QComboBox()
-        self.startButton = QPushButton("Start")
-        self.connectButton = QPushButton("Connect")
-        self.refreshButton = QPushButton("Refresh")
+        self.startButton = QPushButton('Start')
+        self.connectButton = QPushButton('Connect')
+        self.refreshButton = QPushButton('Refresh')
         self.distance_slider = QSlider(QtCore.Qt.Horizontal)
         self.interval_slider = QSlider(QtCore.Qt.Horizontal)
-        self.controls_container = QGroupBox("Controles")
+        self.controls_container = QGroupBox('Controles')
         
         # definindo os tamanhos minimos dos botões e comboBox
         self.combobox.setMinimumSize(120, 36)
@@ -224,53 +221,51 @@ class MainWindow(QtWidgets.QMainWindow):
         self.controls_container.setMinimumHeight(300)
         
         # definindo os valores dos sliders (valores maximos, minimos e iniciais)
+        self.interval_slider.setMinimum(1000) # valor minimo do
         self.distance_slider.setMinimum(2000)
-        self.interval_slider.setMaximum(50000)
+        self.interval_slider.setMaximum(50000) #
         self.distance_slider.setMaximum(160000)
-        self.interval_slider.setMinimum(1000)
         self.interval_slider.setValue(3000)
-        self.distance_slider.setValue(self.required_distance)
+        self.distance_slider.setValue(DEFAUL_REQUIRED_DISTANCE)
         
         # definindo as funções de reação dos elementos
         self.startButton.clicked.connect(self.start_stop)
         self.connectButton.clicked.connect(self.connect)
         self.refreshButton.clicked.connect(self.refresh_default)
-        self.interval_slider.valueChanged.connect(update_time_interval)
-        self.distance_slider.valueChanged.connect(lambda: self.distance_slider.parent.setTitle(f'Distancia ({self.required_distance} cm)'))
+        self.interval_slider.valueChanged.connect(lambda: self.interval_slider.parent().setTitle(f'Intervalo de analize ({self.interval_slider.value() / 100} s)'))
+        self.distance_slider.valueChanged.connect(lambda: self.distance_slider.parent().setTitle(f'Distancia ({self.distance_slider.value() / 1000} cm)'))
         self.combobox.addItems(map(lambda x: x.name, comports()))
         
         # adicionando os campos e elementos ao container de controle
         gridLayout.addWidget(createField('Start/Stop',[self.startButton]), 1, 0)
-        gridLayout.addWidget(createField("Conexão", [self.combobox, self.refreshButton, self.connectButton]), 0, 0)
-        gridLayout.addWidget(createField("Distancia (0 cm)", [self.distance_slider]), 0, 1)
-        gridLayout.addWidget(createField("Intervalo de analize (10.0 s)", [self.interval_slider]), 1, 1)
+        gridLayout.addWidget(createField('Conexão', [self.combobox, self.refreshButton, self.connectButton]), 0, 0)
+        gridLayout.addWidget(createField(f'Distancia ({self.distance_slider.value() / 1000} cm)', [self.distance_slider]), 0, 1)
+        gridLayout.addWidget(createField(f'Intervalo de analize ({self.interval_slider.value() // 100} s)', [self.interval_slider]), 1, 1)
         self.controls_container.setLayout(gridLayout)
     
     def connect(self):
-        self.is_connected = False
-        if self.usb is not None:
-            self.usb.Serial.close()
-            self.usb = None
+        # self.is_connected = False
+        # if self.usb is not None:
+        #     self.usb.Serial.close()
+        #     self.usb = None
         
-        port = self.combobox.currentText()
-        self.usb = USB(port)
-        print('Conectado!')
+        # port = self.combobox.currentText()
+        # self.usb = USB(port)
+        # print('Conectado!')
         self.is_connected = True
 
     def start_stop(self):
-        self.startButton.setText("Start" if self.is_pause else "Stop")
+        self.startButton.setText('Start' if 'Stop' in self.startButton.text() else 'Stop')
         
-        if self.is_pause:
-            self.start()
-        else:
+        if self.timer.isActive():
             self.stop()
+        else:
+            self.start()
             
-
     def refresh_default(self):
         self.combobox.clear()
         self.combobox.addItems(map(lambda x: x.name, comports()))
         
-        self.required_distance = DEFAUL_REQUIRED_DISTANCE
         self.distance_slider.setValue(DEFAUL_REQUIRED_DISTANCE)
         self.interval_slider.setValue(DEFAUL_INTERVAL)
         
@@ -284,35 +279,36 @@ class MainWindow(QtWidgets.QMainWindow):
         self.data_line.setData(self.tempo, self.distance_data)
     
     def update_plot_data(self):
-        if(self.is_connected and self.is_pause == False):
+        if(self.is_connected):
+            # value= self.usb.send(REQUEST_DATA)
             
-            value= self.usb.send(REQUEST_DATA)
-            if(' ' in value  or len(value) <= 2):
-                return
-            elif len(self.tempo) >= (self.interval_slider.value() / DELAY * 100):
-                self.distance_data = self.distance_data[1:]  
-                self.distancia_desejada = self.distancia_desejada[1:]  
-                self.tempo = self.tempo[1:]  
-                self.tempo.append(self.tempo[-1] + DELAY)
-            else:
-                self.tempo.append(len(self.tempo) * DELAY)
-                
-                
-            self.pwmLida.append(float(value.split(';')[1]))  
-            self.distance_data.append(float(value.split(';')[0]))  
-            self.distancia_desejada.append(float(self.required_distance))
+            # if(' ' in value  or len(value) <= 2):
+            #     return
+
+            _MAX = int(self.interval_slider.value() / (DELAY * 100))
+            if len(self.tempo) > (_MAX):                
+                self.tempo = self.tempo[abs(len(self.tempo) - _MAX):]                
+                self.pwmLida = self.pwmLida[abs(len(self.pwmLida) - _MAX):]                
+                self.distancia_desejada = self.distancia_desejada[abs(len(self.distancia_desejada) - _MAX):]                
+                self.distance_data = self.distance_data[abs(len(self.distance_data) - _MAX):]                
+
+            # atualiza a lista do tempo (responsavel pelo eixo X de ambos os gráficos)
+            self.tempo.append(DELAY if len(self.tempo) == 0 else self.tempo[-1] + DELAY)
+                            
+            # self.pwmLida.append(float(value.split(';')[1]))  
+            # self.distance_data.append(float(value.split(';')[0]))  
             
-            self.pwm_line.setData(self.tempo, self.pwmLida)
+            # atualiza as listas de valores do gráfico 
+            self.pwmLida.append(random.uniform( (self.distance_slider.value() / 1000) -50.2, (self.distance_slider.value() / 1000) + 50.2))  
+            self.distance_data.append(random.uniform( (self.distance_slider.value() / 1000) -6.2, (self.distance_slider.value() / 1000) + 4.12))
+            self.distancia_desejada.append(float(self.distance_slider.value() / 1000))
+            
             self.objetive_line.setData(self.tempo, self.distancia_desejada)
+            self.pwm_line.setData(self.tempo, self.pwmLida)
             self.data_line.setData(self.tempo, self.distance_data)
-
         
-
-app = QtWidgets.QApplication(sys.argv)
-w = MainWindow()
-w.show()
-sys.exit(app.exec_())
-
-
-
-
+if __name__ == '__main__':
+    app = QtWidgets.QApplication(sys.argv)
+    w = MainWindow()
+    w.show()
+    sys.exit(app.exec())

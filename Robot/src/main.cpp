@@ -10,14 +10,12 @@
 #include <Arduino.h>
 #include "../include/Arduino-PID-Library/PID_v1.cpp" // um bug faz com que o compilador não encontre os arquivos de forma correta, para contornar isso fizemos o include no aquivo .cpp
 
-
 // pinos
 #define TRIG_PIN 2
 #define ECHO_PIN 3
 
 // sginal bytes §
-#define READY   '#'   // 0x23
-#define HEADER  '<'   // 0x3c
+#define HEAD  '<'   // 0x3c
 #define TAIL    '>'   // 0x3e
 #define RECIVE  '@'   // 0x40
 #define SEND    '%'   // 0x25  
@@ -29,7 +27,7 @@
 
 // constantes
 #define K 29.4 // 29.4 microseconds para o som percorrer um centímetro.
-#define K_drive 1.07 // contante para equilibra a diferença de potencia entre os motores esquedo e direito
+#define K_drive 1.069 // contante para equilibra a diferença de potencia entre os motores esquedo e direito
 #define Kp 2 * 10 // 23.0
 #define Ki 5 * 10 // 0.0
 #define Kd 1 * 10 // 0.0
@@ -57,7 +55,7 @@ PID pid(&distance, &motors_power, &setpoint, Kp, Ki, Kd, P_ON_M, DIRECT);
 void setup() {
 
   Serial.begin(9600);
-  Serial.setTimeout(2);
+  Serial.setTimeout(1);
   pinMode(TRIG_PIN, OUTPUT);
   pinMode(ECHO_PIN, INPUT);
   
@@ -67,44 +65,56 @@ void setup() {
 }
 
 void loop() {
-  distance = mensure();
-  pid.Compute();
-  left_motor.move(-motors_power * K_drive);
+  
+  distance = mensure(); // atualiza a distancia do rôbo para o objeto
+  pid.Compute(); // computa as mudanças e calcula a correção
+
+  // atualiza a potência de aconrdo com o valor calulado no PID
+  left_motor.move(-motors_power * K_drive); 
   right_motor.move(-motors_power);
-  awai_request();
+  
+  // espera uma requisição de dados ou atualização de valores 
+  awai_request(); // pode levar ate 3 ms para essa etapa ser comcluida
 }
 
 void awai_request() {
-  Serial.readStringUntil(RECIVE);
-  Serial.readStringUntil(HEADER);
+  // le até o inicio do cabeçario
+  Serial.readStringUntil(RECIVE); 
+  Serial.readStringUntil(HEAD);
   String data = Serial.readStringUntil(TAIL);
-
-  bool is_setup_distance = (data.indexOf(SET_DISTANCE) >= 0);
-  bool is_data_require = (data.indexOf(REQUEST_DATA) >= 0);
+    
+  if(data.indexOf(SET_DISTANCE) >= 0) send_data();
   
-  send_data();
-  
-  if(is_setup_distance) {
-    data.remove(READY);
-    data.remove(HEADER);
+  // caso haja sinal para para mudar a distancia
+  if(data.indexOf(SET_DISTANCE) >= 0) {
+    // remove todos os possiveis bytes de sinais
+    data.remove(HEAD);
     data.remove(TAIL);
     data.remove(RECIVE);
     data.remove(SEND);
     data.remove(SET_DISTANCE);
     data.remove(REQUEST_DATA);
     data.remove(SPLITER);
+    // converte a string com o valor da nova distancia para double e salva na variavel
     setpoint = data.toDouble();
   }
 
 }
 
 void send_data() {
+  // envia o cabeçario  
   Serial.print(SEND);
-  Serial.print(HEADER);
-  Serial.print(distance);
-  Serial.print(SPLITER);
-  Serial.print(motors_power);
-  Serial.print(TAIL);
+  
+  // byte de inicio do corpo
+  Serial.print(HEAD);
+  
+  // seguindo dos dados (corpo)
+  Serial.print(distance); // dados
+  Serial.print(SPLITER); // divisor pra indicar que são dados diferentes
+  Serial.print(-motors_power); // dados
+  
+  // byte de fim do corpo
+  Serial.print(TAIL); 
 }
 
 float mensure() {
@@ -121,26 +131,37 @@ float mensure() {
     return pulseIn(ECHO_PIN, HIGH) /  K/ 2; // o tempo é dividido por 2 pois a onda vai até o objeto e volta, percorrendo o caminho 2 vezes.
 }
 
+// constructor
 Motor::Motor(int portaA, int portaB) {
+  
+  // slava as portas como artibutos
   this->portaA = portaA;
   this->portaB = portaB;
+  
+  // delcara as portas do motor como OUTPUT
   pinMode(this->portaA, OUTPUT); 
   pinMode(this->portaB, OUTPUT); 
 }
 
+// metodo mover (potencia do motor)
 void Motor::move(double pow) {
 
-  if(pow > 0.0 && pow <= 255.0) {
+  // se a potência for positiva o motor é acionado para frente  
+  if(pow >= 0.0 && pow <= 255.0) {
 
     analogWrite(this->portaA, 0);
     analogWrite(this->portaB, pow);
   
-  } else if (pow < 0.0 && pow >= -255.0) {
+  } 
+  // se a potência for negativa o motor é acionado para trás  
+  else if (pow <= 0.0 && pow >= -255.0) {
   
     analogWrite(this->portaB, 0);
     analogWrite(this->portaA, pow * -1);
 
-  } else {
+  } 
+  // se a potência for fora do escopo de 255 >= pow >= -255; o motor é desligado
+  else {
   
     analogWrite(this->portaA, 0);
     analogWrite(this->portaB, 0);
