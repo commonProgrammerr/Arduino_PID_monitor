@@ -15,22 +15,22 @@
 #define ECHO_PIN 3
 
 // sginal bytes §
-#define HEAD  '<'   // 0x3c
+#define HEAD    '<'   // 0x3c
 #define TAIL    '>'   // 0x3e
 #define RECIVE  '@'   // 0x40
 #define SEND    '%'   // 0x25  
 
 // RECIVE/SEND bytes
 #define SET_DISTANCE  '!' // 0x21  declara a distância "objetiva" 
-#define REQUEST_DATA  '_' // 0x5f  byte de requisição
+#define REQUEST_DATA  '#' // 0x5f  byte de requisição
 #define SPLITER       ';' // 0x3b  byte de separação de valores
 
 // constantes
 #define K 29.4 // 29.4 microseconds para o som percorrer um centímetro.
 #define K_drive 1.069 // contante para equilibra a diferença de potencia entre os motores esquedo e direito
-#define Kp 2 * 10 // 23.0
-#define Ki 5 * 10 // 0.0
-#define Kd 1 * 10 // 0.0
+#define Kp 2 * 11.3 // 23.0
+#define Ki 5 * 9 // 0.0
+#define Kd 1 * 9 // 0.0
 
 class Motor {
   private:
@@ -55,7 +55,7 @@ PID pid(&distance, &motors_power, &setpoint, Kp, Ki, Kd, P_ON_M, DIRECT);
 void setup() {
 
   Serial.begin(9600);
-  Serial.setTimeout(1);
+  Serial.setTimeout(5);
   pinMode(TRIG_PIN, OUTPUT);
   pinMode(ECHO_PIN, INPUT);
   
@@ -80,42 +80,51 @@ void loop() {
 void awai_request() {
   // le até o inicio do cabeçario
   Serial.readStringUntil(RECIVE); 
-  Serial.readStringUntil(HEAD);
+  Serial.readStringUntil(HEAD); // lê ate o inicio do corpo, para descartar bytes de ruido
+  // lê o corpo da requisição e salva em uma string
   String data = Serial.readStringUntil(TAIL);
-    
-  if(data.indexOf(SET_DISTANCE) >= 0) send_data();
+  
+  // analiza quais requisição foram feitas
+  bool set_distance = data.indexOf(SET_DISTANCE) >= 0;
+  bool is_data_required = data.indexOf(REQUEST_DATA) >= 0;
   
   // caso haja sinal para para mudar a distancia
-  if(data.indexOf(SET_DISTANCE) >= 0) {
-    // remove todos os possiveis bytes de sinais
-    data.remove(HEAD);
-    data.remove(TAIL);
-    data.remove(RECIVE);
-    data.remove(SEND);
-    data.remove(SET_DISTANCE);
-    data.remove(REQUEST_DATA);
-    data.remove(SPLITER);
+  if(set_distance) {
+    // remove todos os possiveis bytes de sinais e espaços em branco
+    while(data.indexOf(" ") >= 0)           { data.replace(" ", "");  }
+    while(data.indexOf(TAIL) >= 0)          { data.replace(String(TAIL), ""); }
+    while(data.indexOf(HEAD) >= 0)          { data.replace(String(HEAD), ""); }
+    while(data.indexOf(SEND) >= 0)          { data.replace(String(SEND), ""); }
+    while(data.indexOf(RECIVE) >= 0)        { data.replace(String(RECIVE), ""); }
+    while(data.indexOf(SPLITER) >= 0)       { data.replace(String(SPLITER), "");  }
+    while(data.indexOf(SET_DISTANCE) >= 0)  { data.replace(String(SET_DISTANCE), ""); }
+    while(data.indexOf(REQUEST_DATA) >= 0)  { data.replace(String(REQUEST_DATA), ""); }
     // converte a string com o valor da nova distancia para double e salva na variavel
     setpoint = data.toDouble();
   }
+  
+  if(is_data_required ) {
+      // envia o cabeçario  
+    Serial.print(SEND);
+    
+    // byte de inicio do corpo
+    Serial.print(HEAD);
+    
+    // seguindo dos dados (corpo)
+    Serial.print(distance); // dados
+    Serial.print(SPLITER); // divisor pra indicar que são dados diferentes
+    Serial.print(-motors_power); 
+    // caso o valor tenha sido alterado; retorna o novo valor
+    if (set_distance) {
+      Serial.print(SPLITER); // divisor pra indicar que são dados diferentes
+      Serial.print(setpoint);
+    }
 
+    // byte de fim do corpo
+    Serial.print(TAIL); 
+  }
 }
 
-void send_data() {
-  // envia o cabeçario  
-  Serial.print(SEND);
-  
-  // byte de inicio do corpo
-  Serial.print(HEAD);
-  
-  // seguindo dos dados (corpo)
-  Serial.print(distance); // dados
-  Serial.print(SPLITER); // divisor pra indicar que são dados diferentes
-  Serial.print(-motors_power); // dados
-  
-  // byte de fim do corpo
-  Serial.print(TAIL); 
-}
 
 float mensure() {
     
