@@ -280,6 +280,7 @@ class MainWindow(QtWidgets.QMainWindow):
         if self.last_require_value != self.distance_slider.value() / 100:
             newValue = self.distance_slider.value() / 100
             recived_data = self.usb.send(str(newValue)+REQUEST_DATA + SET_DISTANCE)
+            
             if(' ' in recived_data  or len(recived_data) <= 2):
                 return
             self.last_require_value = float(recived_data.split(';')[2])
@@ -306,8 +307,11 @@ class MainWindow(QtWidgets.QMainWindow):
         
         # atualiza as listas de valores do gráfico 
         self.distancia_desejada.append(self.last_require_value)
+        # self.distancia_desejada.append(self.distance_slider.value() / 100)
         self.pwmLida.append(float(recived_data.split(';')[1]))  
         self.distance_data.append(float(recived_data.split(';')[0]))  
+        # self.pwmLida.append(random.randint(-200, 200))  
+        # self.distance_data.append((random.randint(200, 1600) / 100))  
         
         # insere os dados atualizados no gráfico
         self.objetive_line.setData(self.tempo, self.distancia_desejada)

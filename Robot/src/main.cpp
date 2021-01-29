@@ -74,7 +74,7 @@ void loop() {
   right_motor.move(-motors_power);
   
   // espera uma requisição de dados ou atualização de valores 
-  awai_request(); // pode levar ate 3 ms para essa etapa ser comcluida
+  awai_request(); // pode levar ate 15 ms para essa etapa ser comcluida
 }
 
 void awai_request() {
